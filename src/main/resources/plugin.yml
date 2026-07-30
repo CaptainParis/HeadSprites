@@ -1,0 +1,20 @@
+name: HeadSprites
+version: '1.0'
+main: paris.headsprites.HeadSprites
+api-version: '1.21'
+author: CaptainParis
+description: Inline custom head sprites in chat via MineSkin + MiniMessage object components
+
+commands:
+  sprite:
+    description: Manage head sprites (generate via MineSkin, list, reload)
+    usage: /sprite <generate|list|reload>
+    permission: headsprites.admin
+
+permissions:
+  headsprites.admin:
+    description: Allows managing head sprites via /sprite
+    default: op
+  headsprites.chatformat:
+    description: Allows using full MiniMessage formatting (not just sprite tags) in chat
+    default: op
