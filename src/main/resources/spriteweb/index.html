@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprite Forge</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <span class="brand-mark">◆</span>
+        <span class="brand-name">Sprite Forge</span>
+        <span class="brand-sub">head sprite generator</span>
+    </div>
+    <div class="token-box">
+        <input id="token" type="password" placeholder="web.token" autocomplete="off">
+        <button id="connect" class="btn btn-accent">Connect</button>
+        <span id="status" class="status">Offline</span>
+    </div>
+</header>
+
+<div class="shell">
+    <section class="card preview-panel">
+        <div class="card-head">
+            <h3 class="card-title">Preview</h3>
+            <span id="resout" class="resbadge"><b>8</b> × <b>8</b> px</span>
+        </div>
+        <div class="preview-grid">
+            <div class="preview-main">
+                <div class="layout-row">
+                    <label class="head-count">Heads
+                        <input id="head-count" type="number" min="1" step="1" value="1">
+                    </label>
+                </div>
+                <div class="canvas-wrap">
+                    <canvas id="grid" width="256" height="256"></canvas>
+                </div>
+                <p class="hint">Left-click paints &middot; right-click erases &middot; the layout sets how many 8×8 head blocks are linked.</p>
+            </div>
+
+            <div class="preview-side">
+                <div class="sprite-meta">
+                    <label class="field">Sprite name
+                        <input id="name" type="text" placeholder="letter_a">
+                    </label>
+                    <label class="field">Fallback
+                        <input id="fallback" type="text" placeholder="[A]">
+                    </label>
+                </div>
+                <div class="actions-row">
+                    <button id="generate" class="btn btn-accent btn-block">Generate &amp; Save</button>
+                    <button id="clear" class="btn btn-block">Clear canvas</button>
+                </div>
+                <div id="log" class="log"></div>
+            </div>
+        </div>
+    </section>
+
+    <div class="cards-grid">
+        <section class="card">
+            <div class="card-head"><h3 class="card-title">Draw</h3></div>
+            <div class="tool-row">
+                <button id="tool-brush" class="seg-btn active" type="button">Brush</button>
+                <button id="tool-eraser" class="seg-btn" type="button">Eraser</button>
+                <button id="tool-fill" class="seg-btn" type="button">Fill</button>
+                <button id="tool-pick" class="seg-btn" type="button">Pick</button>
+            </div>
+            <label class="field">Brush color
+                <input id="color" type="color" value="#ffffff">
+            </label>
+            <div class="field">
+                <span class="field-label">Recent colors</span>
+                <div id="swatches" class="swatches"></div>
+            </div>
+            <p class="hint">Left-click paints &middot; right-click erases &middot; pick a tool above.</p>
+        </section>
+
+        <section class="card">
+            <div class="card-head"><h3 class="card-title">Image</h3></div>
+            <label class="field">Upload image
+                <input id="upload" type="file" accept="image/*">
+            </label>
+            <button id="fit" class="btn btn-block">Fit to canvas</button>
+            <p class="hint">Scales the last uploaded image across the whole linked width. You can also paste an image with Ctrl+V.</p>
+        </section>
+    </div>
+
+    <section class="card">
+        <div class="card-head"><h3 class="card-title">Sprites</h3></div>
+        <div id="gallery" class="gallery"></div>
+    </section>
+
+    <section class="card">
+        <div class="card-head"><h3 class="card-title">Sequences</h3></div>
+        <div class="seq-builder">
+            <label class="field">Sequence name
+                <input id="seq-name" type="text" placeholder="vip_rank">
+            </label>
+            <div id="seq-current" class="seq-current"></div>
+            <div class="seq-actions">
+                <button id="seq-clear" class="btn">Clear</button>
+                <button id="seq-save" class="btn btn-accent">Save sequence</button>
+            </div>
+            <p class="hint">Click a sprite above to append it to the sequence.</p>
+        </div>
+        <div id="seq-list" class="seq-list"></div>
+    </section>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
