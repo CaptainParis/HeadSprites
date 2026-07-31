@@ -41,6 +41,12 @@ public final class HeadSprites extends JavaPlugin {
         }
 
         getServer().getPluginManager().registerEvents(new ChatListener(), this);
+
+        if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            getServer().getPluginManager().registerEvents(new SpriteChatBridge(), this);
+            new SpriteChatPlaceholder(this).register();
+            getLogger().info("PlaceholderAPI found; registered %headsprites_msg% for Skript/SkBee chat bridging.");
+        }
     }
 
     @Override

@@ -4,6 +4,7 @@ main: paris.headsprites.HeadSprites
 api-version: '1.21'
 author: CaptainParis
 description: Inline custom head sprites in chat via MineSkin + MiniMessage object components
+softdepend: [PlaceholderAPI]
 
 commands:
   sprite:

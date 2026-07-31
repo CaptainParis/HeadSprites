@@ -88,6 +88,64 @@ Anyone can use the three sprite tags. Players with the `headsprites.chatformat`
 permission can also use full MiniMessage formatting (colors, bold, and so on) in
 their messages.
 
+## Using with Skript
+
+If you run a custom chat format through Skript (or any plugin that cancels the
+chat event and rebuilds the message), the built-in renderer never gets to run,
+so sprite tags would show up as plain text. To fix this, HeadSprites exposes a
+PlaceholderAPI placeholder that hands you the fully rendered message.
+
+### Requirements
+
+- [PlaceholderAPI](https://www.spigotmc.org/resources/6245/). The bridge and the
+  placeholder are only registered when PlaceholderAPI is installed; without it
+  the plugin falls back to the vanilla renderer described above.
+- A Skript addon that can build a text component from a JSON string, such as
+  [SkBee](https://github.com/ShaneBeee/SkBee) (`text component from json ...`).
+
+### The placeholder
+
+`%headsprites_msg%` returns the sender's chat message **already rendered** as a
+JSON text component, with all `<head:…>`, `<sprite:…>`, and `<seq:…>` tags
+resolved into inline heads (and MiniMessage applied for players with
+`headsprites.chatformat`).
+
+The value is captured at the very start of the chat event, before your Skript
+cancels it, so it is always available. When there is nothing to show it returns
+an empty-but-valid component (`{"text":""}`), so parsing it never throws.
+
+Because inline heads are Adventure object components, they cannot be represented
+as a MiniMessage string. Do **not** drop `%headsprites_msg%` into a `formatted
+"…"` string. Instead build your prefix as one component and the message as a JSON
+component, then combine them:
+
+```applescript
+on chat with priority low:
+    # The HeadSprites bridge (priority lowest) has already captured the
+    # rendered message. "message" here is still the original typed text,
+    # which is good for plain-text sinks like Discord or the console.
+    cancel event
+
+    set {_prefix} to mini message from "%player's prefix%<white>%player%<gray>: "
+    set {_body} to text component from json "%headsprites_msg%"
+    broadcast {_prefix} and {_body}
+
+    send "%player%: %message%" to console
+```
+
+### Priority matters
+
+Run your Skript **before** `NORMAL` priority (for example `with priority low` or
+`lowest`). The built-in `ChatListener` runs at `NORMAL` and rewrites the message
+into rendered components; if your Skript reads `message` / `unformatted message`
+after that point, the head tags will have collapsed to empty text and your
+plain-text (Discord/console) lines lose them. Reading the raw text before
+`NORMAL` keeps it intact, while `%headsprites_msg%` still gives you the rendered
+version for in-game chat.
+
+Cancelling the event suppresses the vanilla message, so you will not get a
+duplicate line from the built-in renderer.
+
 ## Commands
 
 All `/sprite` subcommands need the `headsprites.admin` permission.
