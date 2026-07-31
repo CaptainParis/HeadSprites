@@ -24,7 +24,7 @@ public final class ChatListener implements Listener {
         event.message(renderMessageBody(player, event.message()));
     }
 
-    private static Component renderMessageBody(Player sender, Component message) {
+    public static Component renderMessageBody(Player sender, Component message) {
         if (sender.hasPermission("headsprites.chatformat")) {
             String raw = PlainTextComponentSerializer.plainText().serialize(message);
             try {

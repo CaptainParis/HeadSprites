@@ -10,12 +10,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 public final class SpriteManager {
     private static SpriteManager instance;
@@ -207,7 +209,10 @@ public final class SpriteManager {
     }
 
     public Component buildHead(Sprite sprite) {
+        UUID id = UUID.nameUUIDFromBytes(("headsprites:" + sprite.name()).getBytes(StandardCharsets.UTF_8));
         PlayerHeadObjectContents contents = ObjectContents.playerHead()
+                .id(id)
+                .name(sprite.name())
                 .profileProperty(PlayerHeadObjectContents.property("textures", sprite.value(), sprite.signature()))
                 .hat(true)
                 .build();
