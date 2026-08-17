@@ -25,6 +25,7 @@ public final class SpriteManager {
     private final JavaPlugin plugin;
     private final Map<String, Sprite> sprites = new LinkedHashMap<>();
     private final Map<String, List<String>> sequences = new LinkedHashMap<>();
+    private final Map<String, Animation> animations = new LinkedHashMap<>();
     private FileConfiguration config;
     private File configFile;
     private String apiKey;
@@ -51,6 +52,7 @@ public final class SpriteManager {
     private void load() {
         sprites.clear();
         sequences.clear();
+        animations.clear();
         configFile = new File(plugin.getDataFolder(), "sprites.yml");
         if (!configFile.exists()) {
             if (!plugin.getDataFolder().exists() && !plugin.getDataFolder().mkdirs()) {
@@ -61,6 +63,7 @@ public final class SpriteManager {
             config.set("mineskin-api-key", "");
             config.createSection("sprites");
             config.createSection("sequences");
+            config.createSection("animations");
             save();
         } else {
             config = YamlConfiguration.loadConfiguration(configFile);
@@ -126,7 +129,41 @@ public final class SpriteManager {
                 sequences.put(key.toLowerCase(Locale.ROOT), normalized);
             }
         }
-        plugin.getLogger().info("Loaded " + sprites.size() + " head sprites and " + sequences.size() + " sequences from sprites.yml");
+
+        ConfigurationSection animSection = config.getConfigurationSection("animations");
+        if (animSection != null) {
+            for (String key : animSection.getKeys(false)) {
+                ConfigurationSection a = animSection.getConfigurationSection(key);
+                if (a == null) {
+                    continue;
+                }
+                List<List<String>> frames = new ArrayList<>();
+                List<?> rawFrames = a.getList("frames");
+                if (rawFrames != null) {
+                    for (Object entry : rawFrames) {
+                        List<String> row = new ArrayList<>();
+                        if (entry instanceof List<?> list) {
+                            for (Object head : list) {
+                                row.add(String.valueOf(head).toLowerCase(Locale.ROOT));
+                            }
+                        } else if (entry != null) {
+                            row.add(String.valueOf(entry).toLowerCase(Locale.ROOT));
+                        }
+                        if (!row.isEmpty()) {
+                            frames.add(row);
+                        }
+                    }
+                }
+                if (frames.isEmpty()) {
+                    continue;
+                }
+                long intervalMs = a.getLong("interval-ms", 100L);
+                String animKey = key.toLowerCase(Locale.ROOT);
+                animations.put(animKey, new Animation(animKey, frames, intervalMs));
+            }
+        }
+        plugin.getLogger().info("Loaded " + sprites.size() + " head sprites, " + sequences.size()
+                + " sequences and " + animations.size() + " animations from sprites.yml");
     }
 
     public void reload() {
@@ -208,6 +245,53 @@ public final class SpriteManager {
         return true;
     }
 
+    public Animation getAnimation(String name) {
+        return name == null ? null : animations.get(name.toLowerCase(Locale.ROOT));
+    }
+
+    public Map<String, Animation> getAnimations() {
+        return animations;
+    }
+
+    public void putAnimation(String name, List<List<String>> frames, long intervalMs) {
+        String key = name.toLowerCase(Locale.ROOT);
+        List<List<String>> normalized = new ArrayList<>();
+        for (List<String> frame : frames) {
+            List<String> row = new ArrayList<>();
+            for (String head : frame) {
+                row.add(head.toLowerCase(Locale.ROOT));
+            }
+            if (!row.isEmpty()) {
+                normalized.add(row);
+            }
+        }
+        long interval = intervalMs <= 0 ? 100L : intervalMs;
+        config.set("animations." + key + ".frames", normalized);
+        config.set("animations." + key + ".interval-ms", interval);
+        save();
+        animations.put(key, new Animation(key, normalized, interval));
+    }
+
+    public boolean removeAnimation(String name) {
+        String key = name.toLowerCase(Locale.ROOT);
+        if (!animations.containsKey(key)) {
+            return false;
+        }
+        config.set("animations." + key, null);
+        save();
+        animations.remove(key);
+        return true;
+    }
+
+    public int currentFrameIndex(Animation animation) {
+        int count = animation == null ? 0 : animation.frames().size();
+        if (count <= 0) {
+            return 0;
+        }
+        long interval = animation.intervalMs() <= 0 ? 100L : animation.intervalMs();
+        return (int) ((System.currentTimeMillis() / interval) % count);
+    }
+
     public Component buildHead(Sprite sprite) {
         UUID id = UUID.nameUUIDFromBytes(("headsprites:" + sprite.name()).getBytes(StandardCharsets.UTF_8));
         PlayerHeadObjectContents contents = ObjectContents.playerHead()
@@ -236,6 +320,44 @@ public final class SpriteManager {
         return result;
     }
 
+    public Component buildAnimationFrame(Animation animation, int index) {
+        if (animation == null || animation.frames().isEmpty()) {
+            return null;
+        }
+        int count = animation.frames().size();
+        int wrapped = ((index % count) + count) % count;
+        List<String> row = animation.frames().get(wrapped);
+        Component result = null;
+        for (String head : row) {
+            Sprite sprite = getSprite(head);
+            if (sprite == null) {
+                continue;
+            }
+            Component glyph = buildHead(sprite);
+            result = result == null ? glyph : result.append(glyph);
+        }
+        return result;
+    }
+
+    public Component buildAnimation(String name) {
+        Animation animation = getAnimation(name);
+        if (animation == null) {
+            return null;
+        }
+        return buildAnimationFrame(animation, currentFrameIndex(animation));
+    }
+
+    public Component buildAnimationFirstFrame(String name) {
+        Animation animation = getAnimation(name);
+        if (animation == null) {
+            return null;
+        }
+        return buildAnimationFrame(animation, 0);
+    }
+
     public record Sprite(String name, String value, String signature, String fallback) {
+    }
+
+    public record Animation(String name, List<List<String>> frames, long intervalMs) {
     }
 }

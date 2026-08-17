@@ -29,14 +29,35 @@
         <div class="preview-grid">
             <div class="preview-main">
                 <div class="layout-row">
-                    <label class="head-count">Heads
+                    <div class="seg mode-seg">
+                        <button id="mode-sequence" class="seg-btn active" type="button">Sequence</button>
+                        <button id="mode-animation" class="seg-btn" type="button">Animation</button>
+                    </div>
+                    <label class="head-count"><span id="count-label">Heads</span>
                         <input id="head-count" type="number" min="1" step="1" value="1">
                     </label>
+                    <label class="head-count anim-only" id="fps-field" style="display:none">FPS
+                        <input id="fps" type="number" min="1" max="30" step="1" value="8">
+                    </label>
+                </div>
+                <div class="layout-row anim-only" id="frame-nav" style="display:none">
+                    <button id="frame-prev" class="btn" type="button" title="Previous frame (←)">‹ Prev</button>
+                    <span id="frame-counter" class="resbadge">Frame <b>1</b> / <b>1</b></span>
+                    <button id="frame-next" class="btn" type="button" title="Next frame (→)">Next ›</button>
+                    <button id="frame-add" class="btn" type="button">+ Add frame</button>
+                    <button id="frame-del" class="btn" type="button">Delete frame</button>
                 </div>
                 <div class="canvas-wrap">
                     <canvas id="grid" width="256" height="256"></canvas>
                 </div>
-                <p class="hint">Left-click paints &middot; right-click erases &middot; the layout sets how many 8×8 head blocks are linked.</p>
+                <p class="hint">Left-click paints &middot; right-click erases &middot; in Sequence mode each 8×8 block is one linked head &middot; in Animation mode the Heads value sets how wide each frame is, and you page through frames like a book.</p>
+                <div class="anim-preview anim-only" id="anim-preview" style="display:none">
+                    <canvas id="preview" width="96" height="96"></canvas>
+                    <div class="anim-preview-side">
+                        <button id="preview-play" class="btn" type="button">Play</button>
+                        <p class="hint">The preview scrolls through every frame at the set FPS.</p>
+                    </div>
+                </div>
             </div>
 
             <div class="preview-side">
@@ -82,7 +103,7 @@
                 <input id="upload" type="file" accept="image/*">
             </label>
             <button id="fit" class="btn btn-block">Fit to canvas</button>
-            <p class="hint">Scales the last uploaded image across the whole linked width. You can also paste an image with Ctrl+V.</p>
+            <p class="hint">Scales the last uploaded image across the whole linked width. You can also paste an image with Ctrl+V. Upload an animated GIF to split it into frames automatically.</p>
         </section>
     </div>
 
@@ -105,6 +126,12 @@
             <p class="hint">Click a sprite above to append it to the sequence.</p>
         </div>
         <div id="seq-list" class="seq-list"></div>
+    </section>
+
+    <section class="card">
+        <div class="card-head"><h3 class="card-title">Animations</h3></div>
+        <div id="anim-list" class="seq-list"></div>
+        <p class="hint">Play an animation on a refreshable surface with the tag <code>&lt;anim:name&gt;</code> or the placeholder <code>%headsprites_anim_name%</code>. In chat a tag shows the first frame only.</p>
     </section>
 </div>
 

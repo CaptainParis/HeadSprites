@@ -15,7 +15,7 @@ public final class SpriteTags {
     }
 
     public static TagResolver resolver() {
-        return TagResolver.resolver(head(), sprite(), seq());
+        return TagResolver.resolver(head(), sprite(), seq(), anim());
     }
 
     private static TagResolver head() {
@@ -28,6 +28,24 @@ public final class SpriteTags {
 
     private static TagResolver seq() {
         return TagResolver.resolver("seq", SpriteTags::resolveSeq);
+    }
+
+    private static TagResolver anim() {
+        return TagResolver.resolver("anim", SpriteTags::resolveAnim);
+    }
+
+    private static Tag resolveAnim(ArgumentQueue args, Context ctx) {
+        String name = args.popOr("anim tag requires an animation name").value();
+
+        SpriteManager manager = SpriteManager.getInstance();
+        if (manager == null) {
+            throw ctx.newException("Sprite system is not initialized.");
+        }
+        Component frame = manager.buildAnimation(name);
+        if (frame == null) {
+            throw ctx.newException("Unknown or empty animation: '" + name + "'");
+        }
+        return Tag.selfClosingInserting(frame);
     }
 
     private static Tag resolveSeq(ArgumentQueue args, Context ctx) {
@@ -52,6 +70,10 @@ public final class SpriteTags {
             SpriteManager.Sprite stored = manager.getSprite(arg);
             if (stored != null) {
                 return Tag.selfClosingInserting(manager.buildHead(stored));
+            }
+            Component firstFrame = manager.buildAnimationFirstFrame(arg);
+            if (firstFrame != null) {
+                return Tag.selfClosingInserting(firstFrame);
             }
         }
 
