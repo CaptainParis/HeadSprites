@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 public final class ChatListener implements Listener {
     private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
     private static final Pattern SPRITE_TAG_PATTERN =
-            Pattern.compile("<(head|sprite|seq):[^<>]+>", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("<(head|sprite|seq|anim):[^<>]+>", Pattern.CASE_INSENSITIVE);
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onChat(AsyncChatEvent event) {

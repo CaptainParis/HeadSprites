@@ -37,6 +37,12 @@ final class SpriteApiHandler {
             case "/api/sequence/delete" -> {
                 if (post(ex, method)) deleteSequence(ex);
             }
+            case "/api/animation" -> {
+                if (post(ex, method)) animation(ex);
+            }
+            case "/api/animation/delete" -> {
+                if (post(ex, method)) deleteAnimation(ex);
+            }
             case "/api/reload" -> {
                 if (post(ex, method)) {
                     manager.reload();
@@ -73,6 +79,20 @@ final class SpriteApiHandler {
             seqObj.add(name, a);
         });
         root.add("sequences", seqObj);
+        JsonObject animObj = new JsonObject();
+        manager.getAnimations().forEach((name, animation) -> {
+            JsonObject o = new JsonObject();
+            JsonArray frames = new JsonArray();
+            for (List<String> row : animation.frames()) {
+                JsonArray rowArr = new JsonArray();
+                row.forEach(rowArr::add);
+                frames.add(rowArr);
+            }
+            o.add("frames", frames);
+            o.addProperty("intervalMs", animation.intervalMs());
+            animObj.add(name, o);
+        });
+        root.add("animations", animObj);
         return gson.toJson(root);
     }
 
@@ -124,6 +144,43 @@ final class SpriteApiHandler {
     private void deleteSequence(HttpExchange ex) throws IOException {
         JsonObject body = readJson(ex);
         manager.removeSequence(getString(body, "name"));
+        ok(ex, state());
+    }
+
+    private void animation(HttpExchange ex) throws IOException {
+        JsonObject body = readJson(ex);
+        String name = getString(body, "name");
+        if (name.isBlank() || !body.has("frames") || !body.get("frames").isJsonArray()) {
+            SpriteWebServer.send(ex, 400, "application/json", "{\"error\":\"name and frames[] are required\"}");
+            return;
+        }
+        List<List<String>> frames = new ArrayList<>();
+        for (JsonElement el : body.getAsJsonArray("frames")) {
+            List<String> row = new ArrayList<>();
+            if (el.isJsonArray()) {
+                for (JsonElement head : el.getAsJsonArray()) {
+                    row.add(head.getAsString());
+                }
+            } else if (!el.isJsonNull()) {
+                row.add(el.getAsString());
+            }
+            if (!row.isEmpty()) {
+                frames.add(row);
+            }
+        }
+        if (frames.isEmpty()) {
+            SpriteWebServer.send(ex, 400, "application/json", "{\"error\":\"frames[] cannot be empty\"}");
+            return;
+        }
+        long intervalMs = body.has("intervalMs") && !body.get("intervalMs").isJsonNull()
+                ? body.get("intervalMs").getAsLong() : 100L;
+        manager.putAnimation(name, frames, intervalMs);
+        ok(ex, state());
+    }
+
+    private void deleteAnimation(HttpExchange ex) throws IOException {
+        JsonObject body = readJson(ex);
+        manager.removeAnimation(getString(body, "name"));
         ok(ex, state());
     }
 

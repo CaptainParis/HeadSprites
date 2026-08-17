@@ -1,5 +1,5 @@
 name: HeadSprites
-version: '1.0'
+version: '1.2'
 main: paris.headsprites.HeadSprites
 api-version: '1.21'
 author: CaptainParis
@@ -8,8 +8,8 @@ softdepend: [PlaceholderAPI]
 
 commands:
   sprite:
-    description: Manage head sprites (generate via MineSkin, list, reload)
-    usage: /sprite <generate|list|reload>
+    description: Manage head sprites (generate via MineSkin, list, anim, reload)
+    usage: /sprite <generate|list|anim <list|display|stop>|reload>
     permission: headsprites.admin
 
 permissions:
