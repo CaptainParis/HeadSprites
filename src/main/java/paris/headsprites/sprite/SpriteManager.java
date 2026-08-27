@@ -1,5 +1,7 @@
 package paris.headsprites.sprite;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.object.ObjectContents;
 import net.kyori.adventure.text.object.PlayerHeadObjectContents;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Base64;
 
 public final class SpriteManager {
     private static SpriteManager instance;
@@ -292,15 +295,80 @@ public final class SpriteManager {
         return (int) ((System.currentTimeMillis() / interval) % count);
     }
 
+    public String textureHash(Sprite sprite) {
+        return sprite == null ? null : textureHashFromValue(sprite.value());
+    }
+
+    public static String textureHashFromValue(String value) {
+        JsonObject textures = decodeTextures(value);
+        if (textures == null) {
+            return null;
+        }
+        try {
+            String url = textures.getAsJsonObject("textures")
+                    .getAsJsonObject("SKIN")
+                    .get("url")
+                    .getAsString();
+            int slash = url.lastIndexOf('/');
+            String hash = slash >= 0 ? url.substring(slash + 1) : url;
+            return hash == null || hash.isBlank() ? null : hash;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    public String tabHeadTag(Sprite sprite) {
+        String hash = textureHash(sprite);
+        if (hash != null) {
+            return "<head_texture:" + hash + ">";
+        }
+        if (sprite != null && sprite.fallback() != null && !sprite.fallback().isBlank()) {
+            return sprite.fallback();
+        }
+        return "";
+    }
+
     public Component buildHead(Sprite sprite) {
-        UUID id = UUID.nameUUIDFromBytes(("headsprites:" + sprite.name()).getBytes(StandardCharsets.UTF_8));
+        JsonObject textures = decodeTextures(sprite.value());
+        UUID id = profileId(textures);
+        if (id == null) {
+            id = UUID.nameUUIDFromBytes(("headsprites:" + sprite.name()).getBytes(StandardCharsets.UTF_8));
+        }
         PlayerHeadObjectContents contents = ObjectContents.playerHead()
                 .id(id)
-                .name(sprite.name())
                 .profileProperty(PlayerHeadObjectContents.property("textures", sprite.value(), sprite.signature()))
-                .hat(true)
+                .hat(false)
                 .build();
         return Component.object(contents);
+    }
+
+    private static JsonObject decodeTextures(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            byte[] decoded = java.util.Base64.getDecoder().decode(value);
+            return JsonParser.parseString(new String(decoded, StandardCharsets.UTF_8)).getAsJsonObject();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static UUID profileId(JsonObject textures) {
+        if (textures == null || !textures.has("profileId")) {
+            return null;
+        }
+        String raw = textures.get("profileId").getAsString().replace("-", "");
+        if (raw.length() != 32) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw.replaceFirst(
+                    "(\\p{XDigit}{8})(\\p{XDigit}{4})(\\p{XDigit}{4})(\\p{XDigit}{4})(\\p{XDigit}{12})",
+                    "$1-$2-$3-$4-$5"));
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     public Component buildSequence(String name) {

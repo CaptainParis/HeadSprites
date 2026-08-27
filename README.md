@@ -22,7 +22,7 @@ Do these steps in sequence:
 
 1. Build the JAR file. Refer to "Build" below. You can also get a release JAR
    file.
-2. Put `HeadSprites-1.1.jar` in the `plugins/` folder of your server.
+2. Put `HeadSprites-1.3.jar` in the `plugins/` folder of your server.
 3. Start the server one time. The server makes the file
    `plugins/HeadSprites/sprites.yml`.
 4. Stop the server.
@@ -112,8 +112,11 @@ persons that you trust.
 Type these tags in chat. The plugin changes each tag into a head:
 
 - `<head:name>` - shows a saved sprite by name. If the name is an animation, the
-  tag shows the first frame. If the name is not a sprite or an animation, the
-  plugin uses the name as a player name or UUID, and shows that head.
+  tag shows the first frame. If the name is an online player's name or a UUID,
+  the plugin shows that player's skin as a **static** head (signed textures, no
+  username lookup). Unknown names show a gray `?`. The plugin never sends a
+  name-only head, because Minecraft 1.21.11 clients can crash when they look up
+  a username on the tab list during a join.
 - `<sprite:key>` or `<sprite:atlas:key>` - shows a built-in texture-atlas icon.
 - `<seq:name>` - shows a saved sequence as one connected picture.
 - `<anim:name>` - shows one frame of an animation. In chat the frame does not
@@ -151,10 +154,13 @@ The plugin gives you three hooks:
 2. **The PlaceholderAPI placeholder `%headsprites_anim_<name>%`.** The
    placeholder gives you the current frame as a JSON text component. Parse the
    JSON into a component. Then set the component on your surface. Refresh it on a
-   timer.
+   timer. For TAB, use `%headsprites_tab_<name>%` — it returns TAB
+   `<head_texture:…>` syntax and never a username head.
 3. **The Java API.** Call `SpriteManager.getInstance().buildAnimation(name)` to
    get the current frame as a component. Call `buildAnimationFrame(animation,
-   index)` to get one specific frame.
+   index)` to get one specific frame. Parse MiniMessage with
+   `SpriteTags.miniMessage()` (or `chatMiniMessage()` for chat) so `<head>` is
+   crash-safe. Call `SpriteTags.toTabMini(mini)` before sending text to TAB.
 
 ### Example: a boss bar with Skript and SkBee
 
@@ -264,7 +270,7 @@ You need Java 21 and Maven. Run this command:
 mvn clean package
 ```
 
-The plugin file is `target/HeadSprites-1.1.jar`. This is the shaded JAR file. It
+The plugin file is `target/HeadSprites-1.3.jar`. This is the shaded JAR file. It
 contains all dependencies. Put this file in the `plugins/` folder.
 
 ## How it works
@@ -284,6 +290,10 @@ contains all dependencies. Put this file in the `plugins/` folder.
 - A fully clear pixel stays clear. So you can make a shape that is not square.
 - MineSkin has rate limits. A wide sequence, or an animation with many frames,
   makes one request for each head. So a large picture needs more time.
+- Minecraft 1.21.11 can crash if chat, tab, or nametags send a player head that
+  only has a username. HeadSprites always sends signed texture data, or a UUID,
+  or `?`. Put this JAR on every server that shows sprite heads, including
+  minigame servers where players join mid-game.
 
 ## License
 

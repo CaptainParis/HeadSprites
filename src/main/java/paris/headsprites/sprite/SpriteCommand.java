@@ -95,7 +95,7 @@ public final class SpriteCommand implements CommandExecutor, TabCompleter {
         Location where = player.getEyeLocation();
         TextDisplay display = player.getWorld().spawn(where, TextDisplay.class, entity -> {
             entity.setBillboard(TextDisplay.Billboard.CENTER);
-            entity.text(firstFrame);
+            entity.text(SpriteTags.sanitizeHeads(firstFrame));
         });
         UUID displayId = display.getUniqueId();
 
@@ -109,7 +109,7 @@ public final class SpriteCommand implements CommandExecutor, TabCompleter {
                 }
                 Component frame = manager.buildAnimation(name);
                 if (frame != null) {
-                    display.text(frame);
+                    display.text(SpriteTags.sanitizeHeads(frame));
                 }
             }
         }.runTaskTimer(HeadSprites.getInstance(), periodTicks, periodTicks);

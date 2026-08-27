@@ -14,7 +14,7 @@ import paris.headsprites.sprite.SpriteTags;
 import java.util.regex.Pattern;
 
 public final class ChatListener implements Listener {
-    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+    private static final MiniMessage MINI_MESSAGE = SpriteTags.chatMiniMessage();
     private static final Pattern SPRITE_TAG_PATTERN =
             Pattern.compile("<(head|sprite|seq|anim):[^<>]+>", Pattern.CASE_INSENSITIVE);
 
@@ -28,7 +28,7 @@ public final class ChatListener implements Listener {
         if (sender.hasPermission("headsprites.chatformat")) {
             String raw = PlainTextComponentSerializer.plainText().serialize(message);
             try {
-                return MINI_MESSAGE.deserialize(raw, SpriteTags.resolver());
+                return SpriteTags.sanitizeHeads(MINI_MESSAGE.deserialize(raw));
             } catch (Exception ignored) {
             }
         }
@@ -40,12 +40,12 @@ public final class ChatListener implements Listener {
                 .match(SPRITE_TAG_PATTERN)
                 .replacement((match, builder) -> {
                     try {
-                        return MINI_MESSAGE.deserialize(match.group(), SpriteTags.resolver());
+                        return SpriteTags.sanitizeHeads(MINI_MESSAGE.deserialize(match.group()));
                     } catch (Exception ex) {
                         return builder;
                     }
                 })
                 .build();
-        return message.replaceText(replacer);
+        return SpriteTags.sanitizeHeads(message.replaceText(replacer));
     }
 }

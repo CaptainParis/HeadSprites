@@ -6,6 +6,7 @@ import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.NotNull;
 import paris.headsprites.sprite.SpriteManager;
+import paris.headsprites.sprite.SpriteTags;
 
 import java.util.Locale;
 
@@ -39,16 +40,19 @@ public final class SpriteChatPlaceholder extends PlaceholderExpansion {
 
     @Override
     public String onRequest(OfflinePlayer player, @NotNull String params) {
+        String lower = params.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("tab_")) {
+            return SpriteTags.toTabMini("<head:" + lower.substring("tab_".length()) + ">");
+        }
+        if (lower.startsWith("anim_")) {
+            return renderAnimationFrame(lower.substring("anim_".length()));
+        }
         if (player == null) {
             return "";
         }
         if (params.equalsIgnoreCase("msg")) {
             String encoded = SpriteChatBridge.getRendered(player.getUniqueId());
             return encoded == null ? EMPTY_COMPONENT_JSON : encoded;
-        }
-        String lower = params.toLowerCase(Locale.ROOT);
-        if (lower.startsWith("anim_")) {
-            return renderAnimationFrame(lower.substring("anim_".length()));
         }
         return null;
     }
@@ -62,6 +66,6 @@ public final class SpriteChatPlaceholder extends PlaceholderExpansion {
         if (frame == null) {
             return EMPTY_COMPONENT_JSON;
         }
-        return GsonComponentSerializer.gson().serialize(frame);
+        return GsonComponentSerializer.gson().serialize(SpriteTags.sanitizeHeads(frame));
     }
 }
