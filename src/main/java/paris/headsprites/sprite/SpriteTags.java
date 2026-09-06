@@ -4,6 +4,7 @@ import com.destroystokyo.paper.profile.ProfileProperty;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.ObjectComponent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.Context;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -16,16 +17,29 @@ import net.kyori.adventure.text.object.PlayerHeadObjectContents;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
+import paris.headsprites.HeadSprites;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class SpriteTags {
-    private static final Pattern CUSTOM_TAG =
-            Pattern.compile("<(head|seq|anim|sprite):([^<>]+)>", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CUSTOM_TAG = Pattern.compile(
+            "<(head_texture|head|seq|anim|sprite)\\s*:\\s*([^<>]+?)\\s*/?>",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern NAMED_HEAD = Pattern.compile(
+            "<head\\s+([^<>]+?)\\s*/?>",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern NAMED_ASSIGN = Pattern.compile(
+            "(?i)\\b(texture|id|name|uuid)\\s*[=:]\\s*[\"']?([^\"'\\s>]+)[\"']?");
+    private static final Pattern TAB_NAME_HEAD = Pattern.compile(
+            "(?i)<head(?!_texture)(?:[:;][^>]*)?\\s*/?>");
+    private static final Pattern TEXTURE_HASH = Pattern.compile("^[a-f0-9]{32,64}$");
     private static final Component UNKNOWN_HEAD =
             Component.text("?").color(NamedTextColor.DARK_GRAY);
     private static final MiniMessage MINI = buildMini(false);
@@ -54,28 +68,63 @@ public final class SpriteTags {
                 .build();
     }
 
+    public static Component parse(String mini) {
+        if (mini == null || mini.isBlank()) {
+            return Component.empty();
+        }
+        try {
+            return sanitizeHeads(MINI.deserialize(mini));
+        } catch (Exception ignored) {
+            return Component.text(mini);
+        }
+    }
+
     /**
-     * Rewrite sprite tags into TAB {@code head_texture} syntax. Never emits
-     * {@code <head:username>}, which would crash 1.21.11 clients on join.
+     * Rewrite sprite tags into TAB {@code head_texture} syntax. Never emits a
+     * name-only {@code <head>} tag, which would crash 1.21.11 clients on join.
      */
     public static String toTabMini(String mini) {
         if (mini == null || mini.isBlank()) {
             return mini == null ? "" : mini;
         }
-        Matcher matcher = CUSTOM_TAG.matcher(mini);
+        try {
+            return stripTabNameHeads(rewriteKnownTags(mini));
+        } catch (Exception e) {
+            HeadSprites.warnOnce("tab-rewrite", "Failed to rewrite sprite tags for TAB: " + mini, e);
+            return stripTabNameHeads(mini);
+        }
+    }
+
+    private static String stripTabNameHeads(String mini) {
+        if (mini == null || mini.isBlank()) {
+            return mini == null ? "" : mini;
+        }
+        return TAB_NAME_HEAD.matcher(mini).replaceAll("");
+    }
+
+    private static String rewriteKnownTags(String mini) {
+        String colon = replaceAllTags(CUSTOM_TAG, mini, true);
+        return replaceAllTags(NAMED_HEAD, colon, false);
+    }
+
+    private static String replaceAllTags(Pattern pattern, String mini, boolean colonForm) {
+        Matcher matcher = pattern.matcher(mini);
         StringBuilder out = new StringBuilder(mini.length() + 32);
         while (matcher.find()) {
-            matcher.appendReplacement(out, Matcher.quoteReplacement(
-                    rewriteTabTag(matcher.group(1), matcher.group(2))));
+            String replacement = colonForm
+                    ? rewriteTabTag(matcher.group(1), matcher.group(2))
+                    : rewriteNamedHead(matcher.group(1));
+            matcher.appendReplacement(out, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(out);
         return out.toString();
     }
 
     private static String rewriteTabTag(String name, String inner) {
-        String kind = name.toLowerCase(java.util.Locale.ROOT);
-        String arg = inner == null ? "" : inner.trim();
+        String kind = name.toLowerCase(Locale.ROOT);
+        String arg = inner == null ? "" : stripWrappingQuotes(inner.trim());
         return switch (kind) {
+            case "head_texture" -> tabTexture(arg);
             case "head" -> tabHead(arg);
             case "seq" -> tabSequence(arg);
             case "anim" -> tabAnimation(arg, false);
@@ -84,23 +133,91 @@ public final class SpriteTags {
         };
     }
 
+    private static String rewriteNamedHead(String attrs) {
+        Matcher assign = NAMED_ASSIGN.matcher(attrs == null ? "" : attrs);
+        String texture = null;
+        String id = null;
+        String name = null;
+        while (assign.find()) {
+            String key = assign.group(1).toLowerCase(Locale.ROOT);
+            String value = assign.group(2);
+            switch (key) {
+                case "texture" -> texture = value;
+                case "id", "uuid" -> id = value;
+                case "name" -> name = value;
+                default -> {
+                }
+            }
+        }
+        if (texture != null) {
+            return tabTexture(texture);
+        }
+        if (id != null) {
+            return tabHead(id);
+        }
+        if (name != null) {
+            return tabHead(name);
+        }
+        return tabHead(attrs == null ? "" : attrs.trim());
+    }
+
+    private static String stripWrappingQuotes(String value) {
+        if (value.length() >= 2) {
+            char first = value.charAt(0);
+            char last = value.charAt(value.length() - 1);
+            if ((first == '"' || first == '\'') && first == last) {
+                return value.substring(1, value.length() - 1).trim();
+            }
+        }
+        return value;
+    }
+
+    private static String tabTexture(String arg) {
+        String hash = SpriteManager.normalizeLookup(arg);
+        if (TEXTURE_HASH.matcher(hash).matches()) {
+            return headTextureMini(hash);
+        }
+        return tabHead(hash);
+    }
+
     private static String tabHead(String arg) {
+        String cleaned = SpriteManager.normalizeLookup(stripWrappingQuotes(arg));
+        int compact = cleaned.indexOf(';');
+        if (compact >= 0) {
+            cleaned = cleaned.substring(0, compact).trim();
+        }
+        if (cleaned.endsWith(":true") || cleaned.endsWith(":false")) {
+            cleaned = cleaned.substring(0, cleaned.lastIndexOf(':')).trim();
+        }
+        if (cleaned.equals("texture")) {
+            return "";
+        }
+        if (cleaned.startsWith("texture:")) {
+            String hash = SpriteManager.normalizeLookup(stripWrappingQuotes(cleaned.substring("texture:".length())));
+            if (TEXTURE_HASH.matcher(hash).matches()) {
+                return headTextureMini(hash);
+            }
+            cleaned = hash;
+        }
+        if (TEXTURE_HASH.matcher(cleaned).matches()) {
+            return headTextureMini(cleaned);
+        }
         SpriteManager manager = SpriteManager.getInstance();
         if (manager != null) {
-            SpriteManager.Sprite stored = manager.getSprite(arg);
+            SpriteManager.Sprite stored = manager.getSprite(cleaned);
             if (stored != null) {
                 return manager.tabHeadTag(stored);
             }
-            String anim = tabAnimation(arg, true);
+            String anim = tabAnimation(cleaned, true);
             if (!anim.isBlank()) {
                 return anim;
             }
         }
-        if (looksLikeSpriteKey(arg)) {
+        if (looksLikeSpriteKey(cleaned)) {
             return "";
         }
-        UUID uuid = tryParseUuid(arg);
-        Player online = uuid != null ? Bukkit.getPlayer(uuid) : matchOnline(arg);
+        UUID uuid = tryParseUuid(cleaned);
+        Player online = uuid != null ? Bukkit.getPlayer(uuid) : matchOnline(cleaned);
         if (online != null) {
             return tabTextureTag(online);
         }
@@ -113,7 +230,18 @@ public final class SpriteTags {
             return "";
         }
         String hash = SpriteManager.textureHashFromValue(skin.getValue());
-        return hash == null ? "" : "<head_texture:" + hash + ">";
+        return hash == null ? "" : headTextureMini(hash);
+    }
+
+    public static String tabTextureMini(String hash) {
+        return headTextureMini(hash);
+    }
+
+    private static String headTextureMini(String hash) {
+        if (hash == null || hash.isBlank()) {
+            return "";
+        }
+        return "<head_texture:" + hash + ">";
     }
 
     private static String tabSequence(String name) {
@@ -181,11 +309,18 @@ public final class SpriteTags {
     }
 
     private static TagResolver resolver(boolean chatSnapshot) {
-        return TagResolver.resolver(head(), sprite(), seq(), anim(chatSnapshot));
+        return TagResolver.resolver(head(), headTexture(), sprite(), seq(), anim(chatSnapshot));
     }
 
     private static TagResolver head() {
         return TagResolver.resolver("head", SpriteTags::resolveHead);
+    }
+
+    private static TagResolver headTexture() {
+        return TagResolver.resolver("head_texture", (args, ctx) -> {
+            String hash = args.popOr("head_texture tag requires a texture hash").value();
+            return Tag.selfClosingInserting(headFromTextureHash(hash));
+        });
     }
 
     private static TagResolver sprite() {
@@ -227,7 +362,14 @@ public final class SpriteTags {
     }
 
     private static Tag resolveHead(ArgumentQueue args, Context ctx) {
-        String arg = args.popOr("head tag requires a sprite name, username, or UUID").value();
+        String first = args.popOr("head tag requires a sprite name, username, or UUID").value();
+        String arg = first;
+        if ("texture".equalsIgnoreCase(first) && args.hasNext()) {
+            arg = "texture:" + args.pop().value();
+        } else if (("name".equalsIgnoreCase(first) || "id".equalsIgnoreCase(first) || "uuid".equalsIgnoreCase(first))
+                && args.hasNext()) {
+            arg = args.pop().value();
+        }
         return Tag.selfClosingInserting(resolveHeadArgument(arg));
     }
 
@@ -235,33 +377,54 @@ public final class SpriteTags {
         if (arg == null || arg.isBlank()) {
             return UNKNOWN_HEAD;
         }
+        String cleaned = SpriteManager.normalizeLookup(stripWrappingQuotes(arg.trim()));
+        if (cleaned.startsWith("texture:")) {
+            cleaned = SpriteManager.normalizeLookup(stripWrappingQuotes(cleaned.substring("texture:".length())));
+        }
+        if (TEXTURE_HASH.matcher(cleaned).matches()) {
+            return headFromTextureHash(cleaned);
+        }
         SpriteManager manager = SpriteManager.getInstance();
         if (manager != null) {
-            SpriteManager.Sprite stored = manager.getSprite(arg);
+            SpriteManager.Sprite stored = manager.getSprite(cleaned);
             if (stored != null) {
-                return manager.buildHead(stored);
+                return stored.head();
             }
-            Component firstFrame = manager.buildAnimationFirstFrame(arg);
+            Component firstFrame = manager.buildAnimationFirstFrame(cleaned);
             if (firstFrame != null) {
                 return sanitizeHeads(firstFrame);
             }
         }
-        if (looksLikeSpriteKey(arg)) {
+        if (looksLikeSpriteKey(cleaned) || cleaned.equals("texture")) {
             return UNKNOWN_HEAD;
         }
-        UUID uuid = tryParseUuid(arg);
+        UUID uuid = tryParseUuid(cleaned);
         if (uuid != null) {
             return staticHead(uuid);
         }
-        Player online = matchOnline(arg);
+        Player online = matchOnline(cleaned);
         if (online != null) {
             return staticHead(online);
         }
-        OfflinePlayer cached = Bukkit.getOfflinePlayerIfCached(arg);
+        OfflinePlayer cached = Bukkit.getOfflinePlayerIfCached(cleaned);
         if (cached != null) {
             return staticHead(cached.getUniqueId());
         }
         return UNKNOWN_HEAD;
+    }
+
+    private static Component headFromTextureHash(String hash) {
+        String cleaned = SpriteManager.normalizeLookup(stripWrappingQuotes(hash == null ? "" : hash));
+        if (!TEXTURE_HASH.matcher(cleaned).matches()) {
+            return UNKNOWN_HEAD;
+        }
+        String json = "{\"textures\":{\"SKIN\":{\"url\":\"http://textures.minecraft.net/texture/"
+                + cleaned + "\"}}}";
+        String value = Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+        return Component.object(ObjectContents.playerHead()
+                .hat(false)
+                .profileProperty(PlayerHeadObjectContents.property("textures", value))
+                .build());
     }
 
     public static Component staticHead(Player player) {
@@ -285,7 +448,8 @@ public final class SpriteTags {
     }
 
     /**
-     * Rewrite any name-only player heads so the 1.21.11 client never iterates the tab list.
+     * Rewrite any name-only player heads (including inside hover text) so the
+     * 1.21.11 client never iterates the tab list.
      */
     public static Component sanitizeHeads(Component component) {
         if (component == null) {
@@ -296,7 +460,12 @@ public final class SpriteTags {
                 && object.contents() instanceof PlayerHeadObjectContents head) {
             node = rewriteHead(head).style(component.style());
         }
-        List<Component> children = component.children();
+        HoverEvent<?> hover = node.hoverEvent();
+        if (hover != null && hover.action() == HoverEvent.Action.SHOW_TEXT
+                && hover.value() instanceof Component hoverText) {
+            node = node.hoverEvent(HoverEvent.showText(sanitizeHeads(hoverText)));
+        }
+        List<Component> children = node.children();
         if (children.isEmpty()) {
             return node;
         }
@@ -331,7 +500,15 @@ public final class SpriteTags {
         }
         String name = head.name();
         if (name != null && !name.isBlank()) {
-            return resolveHeadArgument(name);
+            Component resolved = resolveHeadArgument(name);
+            if (resolved instanceof ObjectComponent object
+                    && object.contents() instanceof PlayerHeadObjectContents resolvedHead
+                    && resolvedHead.name() != null
+                    && texturesProperty(resolvedHead) == null
+                    && resolvedHead.id() == null) {
+                return UNKNOWN_HEAD;
+            }
+            return resolved;
         }
         return UNKNOWN_HEAD;
     }
@@ -405,7 +582,7 @@ public final class SpriteTags {
         if (raw == null) {
             return false;
         }
-        String key = raw.toLowerCase(java.util.Locale.ROOT);
+        String key = raw.toLowerCase(Locale.ROOT);
         return key.startsWith("u") && key.length() > 10 && key.indexOf('_') == 9;
     }
 
@@ -426,14 +603,17 @@ public final class SpriteTags {
     }
 
     private static UUID tryParseUuid(String raw) {
-        String candidate = raw;
+        if (raw == null) {
+            return null;
+        }
         if (raw.length() == 32 && raw.indexOf('-') < 0) {
-            candidate = raw.replaceFirst(
-                    "([0-9a-fA-F]{8})([0-9a-fA-F]{4})([0-9a-fA-F]{4})([0-9a-fA-F]{4})([0-9a-fA-F]{12})",
-                    "$1-$2-$3-$4-$5");
+            return SpriteManager.parseUndashedUuid(raw);
+        }
+        if (raw.length() != 36) {
+            return null;
         }
         try {
-            return UUID.fromString(candidate);
+            return UUID.fromString(raw);
         } catch (IllegalArgumentException e) {
             return null;
         }

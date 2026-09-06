@@ -40,21 +40,27 @@ public final class SpriteChatPlaceholder extends PlaceholderExpansion {
 
     @Override
     public String onRequest(OfflinePlayer player, @NotNull String params) {
-        String lower = params.toLowerCase(Locale.ROOT);
-        if (lower.startsWith("tab_")) {
-            return SpriteTags.toTabMini("<head:" + lower.substring("tab_".length()) + ">");
+        try {
+            String lower = params.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("tab_")) {
+                return SpriteTags.toTabMini("<head:" + lower.substring("tab_".length()) + ">");
+            }
+            if (lower.startsWith("anim_")) {
+                return renderAnimationFrame(lower.substring("anim_".length()));
+            }
+            if (player == null) {
+                return "";
+            }
+            if (lower.equals("msg")) {
+                String encoded = SpriteChatBridge.getRendered(player.getUniqueId());
+                return encoded == null ? EMPTY_COMPONENT_JSON : encoded;
+            }
+            return null;
+        } catch (Exception e) {
+            HeadSprites.warnOnce("placeholder-" + params.toLowerCase(Locale.ROOT).split("_", 2)[0],
+                    "%headsprites_" + params + "% failed; returning empty", e);
+            return params.toLowerCase(Locale.ROOT).startsWith("tab_") ? "" : EMPTY_COMPONENT_JSON;
         }
-        if (lower.startsWith("anim_")) {
-            return renderAnimationFrame(lower.substring("anim_".length()));
-        }
-        if (player == null) {
-            return "";
-        }
-        if (params.equalsIgnoreCase("msg")) {
-            String encoded = SpriteChatBridge.getRendered(player.getUniqueId());
-            return encoded == null ? EMPTY_COMPONENT_JSON : encoded;
-        }
-        return null;
     }
 
     private String renderAnimationFrame(String name) {

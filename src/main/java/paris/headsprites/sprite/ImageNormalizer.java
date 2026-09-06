@@ -1,11 +1,14 @@
 package paris.headsprites.sprite;
 
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Base64;
+import java.util.Iterator;
 
 public final class ImageNormalizer {
     private static final int SKIN_W = 64;
@@ -13,6 +16,12 @@ public final class ImageNormalizer {
     private static final int FACE = 8;
     private static final int FACE_X = 8;
     private static final int FACE_Y = 8;
+    private static final int MAX_BYTES = 4 * 1024 * 1024;
+    private static final int MAX_DIMENSION = 2048;
+
+    static {
+        ImageIO.setUseCache(false);
+    }
 
     private ImageNormalizer() {
     }
@@ -39,17 +48,49 @@ public final class ImageNormalizer {
         if (input.startsWith("data:") && comma >= 0) {
             base64 = input.substring(comma + 1);
         }
+        if (base64.length() > (long) MAX_BYTES * 4 / 3 + 4) {
+            throw new IOException("Image too large (max 4 MiB).");
+        }
         byte[] bytes;
         try {
             bytes = Base64.getDecoder().decode(base64.trim());
         } catch (IllegalArgumentException e) {
             throw new IOException("Invalid base64 image data.");
         }
-        BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
-        if (image == null) {
-            throw new IOException("Unsupported or corrupt image data.");
+        if (bytes.length > MAX_BYTES) {
+            throw new IOException("Image too large (max 4 MiB).");
         }
-        return image;
+        try (ImageInputStream stream = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+            if (stream == null) {
+                throw new IOException("Unsupported or corrupt image data.");
+            }
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(stream);
+            if (!readers.hasNext()) {
+                throw new IOException("Unsupported image format.");
+            }
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(stream, true, true);
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+                if (width <= 0 || height <= 0) {
+                    throw new IOException("Image has no pixels.");
+                }
+                if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+                    throw new IOException("Image is " + width + "x" + height
+                            + "; the limit is " + MAX_DIMENSION + "px per side.");
+                }
+                BufferedImage image = reader.read(0);
+                if (image == null) {
+                    throw new IOException("Unsupported or corrupt image data.");
+                }
+                return image;
+            } catch (RuntimeException e) {
+                throw new IOException("Corrupt image data: " + e.getMessage());
+            } finally {
+                reader.dispose();
+            }
+        }
     }
 
     private static BufferedImage scaleNearest(BufferedImage src, int w, int h) {
@@ -68,7 +109,9 @@ public final class ImageNormalizer {
 
     private static String encode(BufferedImage image) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImageIO.write(image, "png", out);
+        if (!ImageIO.write(image, "png", out)) {
+            throw new IOException("No PNG encoder available.");
+        }
         String base64 = Base64.getEncoder().encodeToString(out.toByteArray());
         return "data:image/png;base64," + base64;
     }

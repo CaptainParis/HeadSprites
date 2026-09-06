@@ -616,6 +616,17 @@ function render(state) {
             fb.textContent = sp.fallback; chip.appendChild(fb);
         }
         chip.addEventListener("click", function () { addSeqToken(sp.name); });
+        var del = document.createElement("button");
+        del.className = "del"; del.textContent = "\u00d7"; del.title = "delete sprite";
+        del.addEventListener("click", function (e) {
+            e.stopPropagation();
+            if (!confirm("Delete sprite '" + sp.name + "'?")) return;
+            api("/api/sprite/delete", "POST", { name: sp.name }).then(function (state) {
+                render(state);
+                log("Deleted sprite '" + sp.name + "'.", "ok");
+            }).catch(function (err) { log("Delete failed: " + err.message, "err"); });
+        });
+        chip.appendChild(del);
         gallery.appendChild(chip);
     });
 
